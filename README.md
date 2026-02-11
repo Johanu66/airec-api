@@ -14,6 +14,7 @@ A comprehensive Flask-based REST API for movie recommendations with AI-powered c
 - **AI Chatbot**: LLM-powered conversational movie recommendations
 - **RESTful API**: Complete REST API with Swagger documentation
 - **MySQL Database**: Optimized database schema with indexes
+- **Comprehensive Logging**: Automatic log rotation and tracking in `tmp/` directory
 
 ## Technology Stack
 
@@ -87,6 +88,9 @@ JWT_SECRET_KEY=your-jwt-secret
 TMDB_API_KEY=your-tmdb-api-key
 LLM_API_KEY=your-llm-api-key
 LLM_MODEL=gpt-3.5-turbo
+
+# Logging
+LOG_LEVEL=INFO
 
 # CORS
 CORS_ORIGINS=*
@@ -289,8 +293,57 @@ airec-api/
 │   └── validators.py          # Input validation
 └── scripts/
     ├── import_movielens.py    # Data import script
-    └── fetch_posters.py       # Poster fetching script
+    ├── fetch_posters.py       # Poster fetching script
+    ├── init_db.py             # Database initialization
+    └── view_logs.py           # Log viewer utility
 ```
+
+## Logging
+
+### Overview
+All application logs are automatically saved to `tmp/app.log` with automatic rotation:
+- **Log location**: `tmp/app.log`
+- **Rotation**: Automatic at 10MB
+- **Backups**: 5 files retained (~50MB total)
+- **Levels**: DEBUG, INFO, WARNING, ERROR
+
+### Configuration
+Set log level in `.env`:
+```env
+LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR
+```
+
+### View Logs
+```bash
+# Follow live logs
+tail -f tmp/app.log
+
+# View last 100 lines
+python scripts/view_logs.py --lines 100
+
+# Show only errors
+python scripts/view_logs.py --errors
+
+# Follow in real-time
+python scripts/view_logs.py --tail
+
+# Show statistics
+python scripts/view_logs.py --stats
+
+# Search for specific term
+python scripts/view_logs.py --search "user@example.com"
+```
+
+### What Gets Logged
+- ✅ Application startup and configuration
+- ✅ All authentication events
+- ✅ HTTP requests and responses (DEBUG level)
+- ✅ Database operations
+- ✅ Error stack traces
+- ✅ External API calls
+- ✅ User actions
+
+For detailed logging documentation, see [LOGGING.md](LOGGING.md)
 
 ## Security Features
 

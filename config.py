@@ -57,18 +57,28 @@ class Config:
     # Rate Limiting
     RATELIMIT_ENABLED = True
     RATELIMIT_DEFAULT = "200 per hour"
+    
+    # Logging Configuration
+    LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp')
+    LOG_FILE = os.path.join(LOG_DIR, 'app.log')
+    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+    LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB
+    LOG_BACKUP_COUNT = 5
+    LOG_FORMAT = '[%(asctime)s] %(levelname)s in %(module)s: %(message)s'
 
 
 class DevelopmentConfig(Config):
     """Development configuration"""
     DEBUG = True
     SQLALCHEMY_ECHO = True
+    LOG_LEVEL = 'DEBUG'
 
 
 class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
     SQLALCHEMY_ECHO = False
+    LOG_LEVEL = 'INFO'
 
 
 class TestingConfig(Config):
