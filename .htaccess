@@ -1,7 +1,7 @@
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
-PassengerAppRoot "/home/tqffjfwm/airec"
+PassengerAppRoot "/home/tqffjfwm/airec-api"
 PassengerBaseURI "/"
-PassengerPython "/home/tqffjfwm/virtualenv/airec/3.12/bin/python"
+PassengerPython "/home/tqffjfwm/virtualenv/airec-api/3.12/bin/python"
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
 # DO NOT REMOVE OR MODIFY. CLOUDLINUX ENV VARS CONFIGURATION BEGIN
 <IfModule Litespeed>

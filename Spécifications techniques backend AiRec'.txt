@@ -1,0 +1,163 @@
+﻿Spécifications techniques backend AiRec'
+1. GESTION DES UTILISATEURS
+1.1 Authentification
+* Inscription (Register)
+   * Endpoint : POST /api/auth/register
+   * Données : nom, prénom, email, mot de passe, préférences initiales (optionnel)
+   * Validation des données
+   * Hashage du mot de passe
+   * Création du profil utilisateur
+* Connexion (Login)
+   * Endpoint : POST /api/auth/login
+   * Authentification par email/mot de passe
+   * Génération de token JWT
+   * Gestion de session
+* Déconnexion
+   * Endpoint : POST /api/auth/logout
+   * Invalidation du token
+1.2 Profil Utilisateur
+* Récupération du profil
+   * Endpoint : GET /api/user/profile
+   * Historique des films vus
+   * Liste des avis donnés
+   * Préférences/catégories favorites
+* Mise à jour du profil
+   * Endpoint : PUT /api/user/profile
+   * Modification des informations personnelles
+   * Mise à jour des préférences de genres
+2. GESTION DES FILMS (Base de données MovieLens)
+2.1 Récupération des Films
+* Liste de tous les films
+   * Endpoint : GET /api/movies
+   * Pagination
+   * Filtres : genre, année, note moyenne
+* Détails d'un film
+   * Endpoint : GET /api/movies/:id
+   * Informations complètes : titre, genres, description, affiche, image de fond
+   * Note moyenne
+   * Nombre d'avis
+2.2 Catégories de Films
+* Liste des catégories
+   * Endpoint : GET /api/categories
+   * Retourne les genres disponibles (Action, Adventure, Animation, Children's, Comedy, Crime, Documentary, Drama, Fantasy, Film-Noir, Horror, Musical, Mystery, Romance, Sci-Fi, Thriller, War, Western)
+* Films par catégorie
+   * Endpoint : GET /api/categories/:genre/movies
+   * Pagination
+   * Tri par popularité/note
+2.3 Données Visuelles
+* Récupération des affiches
+   * Script d'import depuis API externe (TMDB/OMDB)
+   * Stockage local ou URLs
+* Images de fond d'accueil
+   * Sélection aléatoire de films populaires
+   * Endpoint : GET /api/movies/featured
+3. SYSTÈME D'AVIS
+3.1 Soumission d'Avis
+* Créer/Modifier un avis
+   * Endpoint : POST /api/movies/:id/ratings
+   * Données : UserID, MovieID, Rating (1-5), Timestamp
+   * Validation : un seul avis par utilisateur par film
+* Récupérer les avis d'un film
+   * Endpoint : GET /api/movies/:id/ratings
+   * Liste paginée des avis
+   * Calcul de la note moyenne
+* Récupérer les avis d'un utilisateur
+   * Endpoint : GET /api/user/ratings
+   * Historique complet des notes données
+4. SYSTÈME DE RECOMMANDATION
+4.1 Filtrage Collaboratif (notre model)
+* Recommandations personnalisées
+   * Endpoint : GET /api/recommendations/user
+   * Algorithme basé sur les similarités entre utilisateurs
+   * Analyse des 10M d'avis du dataset MovieLens
+   * Retourne les top films recommandés
+4.2 Recommandations par Catégorie (notre model)
+* Meilleurs films par genre
+   * Endpoint : GET /api/recommendations/category/:genre
+   * Tri par note moyenne et popularité
+   * Filtre selon les préférences utilisateur
+4.3 Suggestions Automatiques
+* Page d'accueil personnalisée
+   * Endpoint : GET /api/recommendations/home
+   * Mix de films populaires et recommandations personnalisées
+   * Films tendances
+5. CHATBOT IA (Intégration LLM)
+5.1 Conversation
+* Envoyer un prompt
+   * Endpoint : POST /api/chatbot/query
+   * Données : message utilisateur, contexte de conversation
+   * Appel à l'API LLM (GPT/Claude/Mistral/Gemini)
+* Récupérer l'historique
+   * Endpoint : GET /api/chatbot/history
+   * Sessions de conversation sauvegardées
+5.2 Recommandations Conversationnelles
+* Propositions basées sur l'humeur
+   * Analyse du prompt utilisateur
+   * Recherche dans la base selon critères extraits
+   * Retour de suggestions contextualisées
+6. BASE DE DONNÉES SQL
+6.1 Tables Principales
+Users
+id, email, password_hash, nom, prenom, created_at, updated_at
+
+
+Movies (importé de MovieLens)
+id, title, genres, release_year, description, poster_url, backdrop_url
+
+
+Ratings (importé de MovieLens)
+id, user_id, movie_id, rating, timestamp
+
+
+User_Preferences
+id, user_id, favorite_genres (JSON), created_at, updated_at
+
+
+Chatbot_Sessions
+id, conversation_history (JSON), created_at
+
+
+6.2 Optimisations
+* Index sur user_id, movie_id, genres
+* Vues matérialisées pour les statistiques
+* Cache Redis pour les recommandations fréquentes
+7. ARCHITECTURE TECHNIQUE
+7.1 Stack Backend
+* Framework : Flask (Python)
+* Base de données : PostgreSQL/MySQL
+* ORM : SQLAlchemy
+* Cache : Redis (optionnel)
+* API externe : TMDB pour affiches/descriptions
+7.2 Structure du Projet
+backend/
+├── app.py                # Point d'entrée Flask
+├── config.py             # Configuration
+├── models/               # Modèles SQLAlchemy
+│   ├── user.py
+│   ├── movie.py
+│   ├── rating.py
+├── routes/               # Endpoints API
+│   ├── auth.py
+│   ├── movies.py
+│   ├── recommendations.py
+│   ├── chatbot.py
+├── services/             # Logique métier
+│   ├── recommendation_engine.py
+│   ├── llm_service.py
+│   ├── data_import.py
+├── utils/                # Utilitaires
+│   ├── jwt_handler.py
+│   ├── validators.py
+├── scripts/              # Scripts d'import
+│   ├── import_movielens.py
+│   ├── fetch_posters.py
+├── requirements.txt
+└── README.md
+
+
+8. SÉCURITÉ
+* Validation des entrées : Sanitization de toutes les données utilisateur
+* Rate limiting : Protection contre les abus d'API
+* CORS : Configuration pour le frontend
+* HTTPS : Obligatoire en production
+* JWT expiration : Tokens valides 24h
