@@ -22,7 +22,8 @@ def token_required(fn):
 
 def get_current_user():
     """Get current user ID from JWT token"""
-    return get_jwt_identity()
+    identity = get_jwt_identity()
+    return int(identity) if identity else None
 
 
 def add_token_to_blacklist(jti):
