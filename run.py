@@ -1,13 +1,15 @@
 import os
 import sys
 
-
+# Add current directory to path
 sys.path.insert(0, os.path.dirname(__file__))
 
+# Import the Flask application
+from app import app
 
-def app(environ, start_response):
-    start_response('200 OK', [('Content-Type', 'text/plain')])
-    message = 'It works!\n'
-    version = 'Python v' + sys.version.split()[0] + '\n'
-    response = '\n'.join([message, version])
-    return [response.encode()]
+# For running directly
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_ENV', 'development') == 'development'
+    app.run(host='0.0.0.0', port=port, debug=debug)
+
