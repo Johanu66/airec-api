@@ -16,14 +16,11 @@ All specifications from "Spécifications techniques backend AiRec'.txt" have bee
 airec-api/
 ├── app.py                          # Main Flask application with Swagger
 ├── config.py                       # Configuration management
-├── passenger_wsgi.py               # Production WSGI entry point
 ├── requirements.txt                # Python dependencies
 ├── .env.example                    # Environment variables template
 ├── postman_collection.json         # Postman API collection
-│
 ├── models/
 │   └── __init__.py                # Database models (User, Movie, Rating, etc.)
-│
 ├── routes/
 │   ├── auth.py                    # Authentication endpoints
 │   ├── user.py                    # User profile management
@@ -32,15 +29,12 @@ airec-api/
 │   ├── ratings.py                 # Rating system
 │   ├── recommendations.py         # Recommendation engine endpoints
 │   └── chatbot.py                 # AI chatbot integration
-│
 ├── services/
 │   ├── recommendation_engine.py   # Collaborative filtering logic
 │   └── llm_service.py            # LLM API integration
-│
 ├── utils/
 │   ├── jwt_handler.py            # JWT authentication utilities
 │   └── validators.py             # Input validation functions
-│
 └── scripts/
     ├── init_db.py                # Database initialization
     ├── import_movielens.py       # MovieLens data import
