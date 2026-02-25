@@ -16,13 +16,9 @@ All specifications from "Spécifications techniques backend AiRec'.txt" have bee
 airec-api/
 ├── app.py                          # Main Flask application with Swagger
 ├── config.py                       # Configuration management
-├── run.py                          # Development server entry point
 ├── passenger_wsgi.py               # Production WSGI entry point
 ├── requirements.txt                # Python dependencies
 ├── .env.example                    # Environment variables template
-├── README.md                       # Full documentation
-├── QUICKSTART.md                   # Quick start guide
-├── API_TESTING.md                  # API testing examples
 ├── postman_collection.json         # Postman API collection
 │
 ├── models/
