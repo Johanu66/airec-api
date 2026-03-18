@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from sqlalchemy import func
-from models import db, Movie, Rating
+from models import db, Movie, Rating, Genre
 from utils.validators import validate_pagination
 
 categories_bp = Blueprint('categories', __name__, url_prefix='/api/categories')
@@ -80,7 +80,11 @@ def get_movies_by_category(genre):
         return jsonify({'error': message}), 400
     
     # Build query
-    query = Movie.query.filter(Movie.genres.like(f'%{genre}%'))
+    genre_obj = Genre.query.filter_by(name=genre).first()
+    if not genre_obj:
+        return jsonify({'error': 'Genre not found'}), 404
+    
+    query = Movie.query.filter(Movie.genres_list.contains(genre_obj))
     
     # Sorting
     sort_by = request.args.get('sort_by', 'popularity')

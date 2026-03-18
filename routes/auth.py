@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, create_refresh_token, get_jwt
-from models import db, User, UserPreferences
+from models import db, User, Genre
 from utils.validators import validate_email_format, validate_password_strength, sanitize_string
 from utils.jwt_handler import token_required, add_token_to_blacklist
 
@@ -89,11 +89,12 @@ def register():
     db.session.add(user)
     db.session.flush()  # Get user.id
     
-    # Create user preferences if provided
+    # Add favorite genres if provided
     if 'favorite_genres' in data and data['favorite_genres']:
-        preferences = UserPreferences(user_id=user.id)
-        preferences.set_favorite_genres(data['favorite_genres'])
-        db.session.add(preferences)
+        for genre_name in data['favorite_genres']:
+            genre = Genre.query.filter_by(name=genre_name).first()
+            if genre:
+                user.favorite_genres.append(genre)
     
     db.session.commit()
     
@@ -154,6 +155,10 @@ def login():
     
     if not user or not user.check_password(data['password']):
         return jsonify({'error': 'Invalid email or password'}), 401
+    
+    # Prevent imported MovieLens users from logging in
+    if user.is_imported:
+        return jsonify({'error': 'This account is for data purposes only and cannot be used for login'}), 403
     
     # Create tokens
     access_token = create_access_token(identity=str(user.id))

@@ -1,6 +1,6 @@
 import numpy as np
 from sqlalchemy import func
-from models import db, Movie, Rating, UserPreferences
+from models import db, Movie, Rating, Genre
 from collections import defaultdict
 
 
@@ -85,7 +85,13 @@ class RecommendationEngine:
     def get_genre_based_recommendations(self, genre, user_id=None, limit=10):
         """Get best movies in a specific genre"""
         
-        query = Movie.query.filter(Movie.genres.like(f'%{genre}%'))
+        # Find the genre object
+        genre_obj = Genre.query.filter_by(name=genre).first()
+        if not genre_obj:
+            return []
+        
+        # Get movies in this genre
+        query = Movie.query.filter(Movie.genres_list.contains(genre_obj))
         
         # If user_id provided, exclude movies they've already rated
         if user_id:
@@ -183,12 +189,14 @@ class RecommendationEngine:
         
         # Find movies with overlapping genres
         similar_movies = []
-        for genre in genres:
-            genre_movies = Movie.query.filter(
-                Movie.genres.like(f'%{genre}%'),
-                Movie.id != movie_id
-            ).limit(limit * 2).all()
-            similar_movies.extend(genre_movies)
+        for genre_name in genres:
+            genre_obj = Genre.query.filter_by(name=genre_name).first()
+            if genre_obj:
+                genre_movies = Movie.query.filter(
+                    Movie.genres_list.contains(genre_obj),
+                    Movie.id != movie_id
+                ).limit(limit * 2).all()
+                similar_movies.extend(genre_movies)
         
         # Remove duplicates and limit
         seen = set()

@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from models import db, User, UserPreferences, Rating
+from models import db, User, Rating, Genre
 from utils.jwt_handler import token_required, get_current_user
 from utils.validators import validate_pagination, sanitize_string
 
@@ -100,16 +100,16 @@ def update_profile():
         if prenom:
             user.prenom = prenom
     
-    # Update preferences if provided
-    if 'favorite_genres' in data:
-        preferences = UserPreferences.query.filter_by(user_id=user_id).first()
+    # Update favorite genres if provided
+    if 'favorite_genres' in data and isinstance(data['favorite_genres'], list):
+        # Clear existing genres
+        user.favorite_genres.clear()
         
-        if not preferences:
-            preferences = UserPreferences(user_id=user_id)
-            db.session.add(preferences)
-        
-        if isinstance(data['favorite_genres'], list):
-            preferences.set_favorite_genres(data['favorite_genres'])
+        # Add new genres
+        for genre_name in data['favorite_genres']:
+            genre = Genre.query.filter_by(name=genre_name).first()
+            if genre:
+                user.favorite_genres.append(genre)
     
     db.session.commit()
     
@@ -185,12 +185,15 @@ def get_preferences():
         description: Unauthorized
     """
     user_id = get_current_user()
-    preferences = UserPreferences.query.filter_by(user_id=user_id).first()
+    user = User.query.get(user_id)
     
-    if not preferences:
-        return jsonify({'favorite_genres': []}), 200
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
     
-    return jsonify(preferences.to_dict()), 200
+    return jsonify({
+        'user_id': user.id,
+        'favorite_genres': [g.name for g in user.favorite_genres]
+    }), 200
 
 
 @user_bp.route('/preferences', methods=['PUT'])
@@ -229,16 +232,22 @@ def update_preferences():
     if 'favorite_genres' not in data or not isinstance(data['favorite_genres'], list):
         return jsonify({'error': 'favorite_genres must be an array'}), 400
     
-    preferences = UserPreferences.query.filter_by(user_id=user_id).first()
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
     
-    if not preferences:
-        preferences = UserPreferences(user_id=user_id)
-        db.session.add(preferences)
+    # Clear existing genres
+    user.favorite_genres.clear()
     
-    preferences.set_favorite_genres(data['favorite_genres'])
+    # Add new genres
+    for genre_name in data['favorite_genres']:
+        genre = Genre.query.filter_by(name=genre_name).first()
+        if genre:
+            user.favorite_genres.append(genre)
+    
     db.session.commit()
     
     return jsonify({
         'message': 'Preferences updated successfully',
-        'preferences': preferences.to_dict()
+        'favorite_genres': [g.name for g in user.favorite_genres]
     }), 200

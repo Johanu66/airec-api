@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from sqlalchemy import or_, and_, func
-from models import db, Movie, Rating
+from models import db, Movie, Rating, Genre
 from utils.validators import validate_pagination, validate_year
 
 movies_bp = Blueprint('movies', __name__, url_prefix='/api/movies')
@@ -85,7 +85,9 @@ def get_movies():
     # Filter by genre
     genre = request.args.get('genre')
     if genre:
-        query = query.filter(Movie.genres.like(f'%{genre}%'))
+        genre_obj = Genre.query.filter_by(name=genre).first()
+        if genre_obj:
+            query = query.filter(Movie.genres_list.contains(genre_obj))
     
     # Filter by year
     year = request.args.get('year')

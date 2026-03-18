@@ -6,6 +6,40 @@ import json
 db = SQLAlchemy()
 
 
+# Association table for many-to-many relationship between movies and genres
+movie_genres = db.Table('movie_genres',
+    db.Column('movie_id', db.Integer, db.ForeignKey('movies.id'), primary_key=True),
+    db.Column('genre_id', db.Integer, db.ForeignKey('genres.id'), primary_key=True)
+)
+
+# Association table for many-to-many relationship between users and their favorite genres
+user_favorite_genres = db.Table('user_favorite_genres',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('genre_id', db.Integer, db.ForeignKey('genres.id'), primary_key=True)
+)
+
+
+class Genre(db.Model):
+    """Genre model for movie categories"""
+    __tablename__ = 'genres'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    
+    # Relationships
+    movies = db.relationship('Movie', secondary=movie_genres, back_populates='genres_list')
+    
+    def to_dict(self):
+        """Convert genre object to dictionary"""
+        return {
+            'id': self.id,
+            'name': self.name
+        }
+    
+    def __repr__(self):
+        return f'<Genre {self.name}>'
+
+
 class User(db.Model):
     """User model for authentication and profile management"""
     __tablename__ = 'users'
@@ -15,12 +49,13 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     nom = db.Column(db.String(100), nullable=False)
     prenom = db.Column(db.String(100), nullable=False)
+    is_imported = db.Column(db.Boolean, default=False, nullable=False, index=True)  # Flag for MovieLens imported users
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
     # Relationships
     ratings = db.relationship('Rating', backref='user', lazy='dynamic', cascade='all, delete-orphan')
-    preferences = db.relationship('UserPreferences', backref='user', uselist=False, cascade='all, delete-orphan')
+    favorite_genres = db.relationship('Genre', secondary=user_favorite_genres, backref='users')
     
     def set_password(self, password):
         """Hash and set user password"""
@@ -37,13 +72,14 @@ class User(db.Model):
             'email': self.email,
             'nom': self.nom,
             'prenom': self.prenom,
+            'is_imported': self.is_imported,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }
         
         if include_ratings:
             data['ratings_count'] = self.ratings.count()
-            data['preferences'] = self.preferences.to_dict() if self.preferences else None
+            data['favorite_genres'] = [g.name for g in self.favorite_genres]
             
         return data
     
@@ -57,7 +93,6 @@ class Movie(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False, index=True)
-    genres = db.Column(db.String(255), nullable=True)  # Pipe-separated genres
     release_year = db.Column(db.Integer, nullable=True, index=True)
     description = db.Column(db.Text, nullable=True)
     poster_url = db.Column(db.String(500), nullable=True)
@@ -68,12 +103,11 @@ class Movie(db.Model):
     
     # Relationships
     ratings = db.relationship('Rating', backref='movie', lazy='dynamic', cascade='all, delete-orphan')
+    genres_list = db.relationship('Genre', secondary=movie_genres, back_populates='movies')
     
     def get_genres_list(self):
-        """Return genres as a list"""
-        if self.genres:
-            return [g.strip() for g in self.genres.split('|')]
-        return []
+        """Return genres as a list of names"""
+        return [g.name for g in self.genres_list]
     
     def get_average_rating(self):
         """Calculate average rating for this movie"""
@@ -149,42 +183,6 @@ class Rating(db.Model):
     
     def __repr__(self):
         return f'<Rating user={self.user_id} movie={self.movie_id} rating={self.rating}>'
-
-
-class UserPreferences(db.Model):
-    """User preferences for personalized recommendations"""
-    __tablename__ = 'user_preferences'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True)
-    favorite_genres = db.Column(db.Text, nullable=True)  # JSON array
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    def get_favorite_genres(self):
-        """Return favorite genres as a list"""
-        if self.favorite_genres:
-            try:
-                return json.loads(self.favorite_genres)
-            except:
-                return []
-        return []
-    
-    def set_favorite_genres(self, genres_list):
-        """Set favorite genres from a list"""
-        self.favorite_genres = json.dumps(genres_list)
-    
-    def to_dict(self):
-        """Convert preferences object to dictionary"""
-        return {
-            'id': self.id,
-            'user_id': self.user_id,
-            'favorite_genres': self.get_favorite_genres(),
-            'updated_at': self.updated_at.isoformat()
-        }
-    
-    def __repr__(self):
-        return f'<UserPreferences user={self.user_id}>'
 
 
 class ChatbotSession(db.Model):

@@ -12,3 +12,6 @@ build/
 tmp/app.log
 tmp/app.log.*
 *.log
+
+# Local datasets
+tmp/ml-1m/
