@@ -114,6 +114,21 @@ Once the application is running, visit:
 - **Swagger UI**: http://localhost:5000/swagger/
 - **API Spec**: http://localhost:5000/apispec.json
 
+## Additional Documentation
+
+Project documentation has been centralized in the docs folder:
+
+- [Quick Start](docs/QUICKSTART.md)
+- [API Testing Guide](docs/API_TESTING.md)
+- [Logging Guide](docs/LOGGING.md)
+- [Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)
+- [RAG Quick Start](docs/RAG_QUICK_START.md)
+- [RAG Documentation Index](docs/README_RAG.md)
+- [RAG Complete Implementation](docs/IMPLEMENTATION_COMPLETE.md)
+- [Implementation Checklist](docs/IMPLEMENTATION_CHECKLIST.md)
+- [Final Summary](docs/FINAL_SUMMARY.md)
+- [Changelog](docs/CHANGELOG.md)
+
 ## Data Import
 
 ### Import MovieLens Dataset
@@ -343,7 +358,7 @@ python scripts/view_logs.py --search "user@example.com"
 - ✅ External API calls
 - ✅ User actions
 
-For detailed logging documentation, see [LOGGING.md](LOGGING.md)
+For detailed logging documentation, see [docs/LOGGING.md](docs/LOGGING.md)
 
 ## Security Features
 

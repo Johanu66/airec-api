@@ -1,10 +1,10 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime
-from models import db, ChatbotSession, Movie
-from services.llm_service import llm_service
+from models import db, ChatbotSession
+from services.chat_orchestrator import chat_orchestrator
+from services.rag_service import rag_service
 from utils.jwt_handler import token_required, get_current_user
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from sqlalchemy import func
 
 chatbot_bp = Blueprint('chatbot', __name__, url_prefix='/api/chatbot')
 
@@ -48,7 +48,7 @@ def chatbot_query():
       400:
         description: Invalid input
     """
-    data = request.get_json()
+    data = request.get_json() or {}
     
     if 'message' not in data or not data['message']:
         return jsonify({'error': 'Message is required'}), 400
@@ -75,51 +75,21 @@ def chatbot_query():
         db.session.add(session)
         db.session.flush()
     
-    # Add user message to history
-    session.add_message('user', user_message)
-    
-    # Extract preferences from message
-    preferences = llm_service.extract_movie_preferences(user_message)
-    
-    # Get movie recommendations based on extracted preferences
-    movie_recommendations = []
-    if preferences.get('genres'):
-        # Get movies from mentioned genres
-        from services.recommendation_engine import RecommendationEngine
-        engine = RecommendationEngine()
-        
-        for genre in preferences['genres'][:2]:  # Limit to 2 genres
-            genre_movies = engine.get_genre_based_recommendations(
-                genre, user_id, limit=5
-            )
-            movie_recommendations.extend(genre_movies)
-    
-    # Build context about available movies
-    movie_context = ""
-    if movie_recommendations:
-        movie_context = "Some relevant movies from our database:\n"
-        for movie in movie_recommendations[:5]:
-            movie_context += f"- {movie.title} ({movie.release_year}): {', '.join(movie.get_genres_list())}\n"
-    
-    # Get conversation history for context
+    # Build response with orchestrator (criteria + semantic RAG + fallback)
     history = session.get_conversation_history()
-    messages = []
-    
-    # Add recent conversation history (last 5 messages)
-    for msg in history[-5:]:
-        if msg['role'] in ['user', 'assistant']:
-            messages.append({
-                'role': msg['role'],
-                'content': msg['content']
-            })
-    
-    # Generate LLM response
-    llm_response = llm_service.get_movie_recommendations_from_prompt(
-        user_message,
-        movie_context
+    orchestrated = chat_orchestrator.process_message(
+      message=user_message,
+      conversation_history=history,
+      user_id=user_id,
+      session_id=str(session.id),
+      limit=10
     )
-    
-    # Add assistant response to history
+
+    llm_response = orchestrated.get('response', '')
+    recommendations = orchestrated.get('recommendations', [])
+
+    # Persist chat history in session table
+    session.add_message('user', user_message)
     session.add_message('assistant', llm_response)
     session.updated_at = datetime.utcnow()
     
@@ -131,10 +101,8 @@ def chatbot_query():
         'session_id': session.id
     }
     
-    if movie_recommendations:
-        response_data['recommendations'] = [
-            m.to_dict(include_stats=True) for m in movie_recommendations[:10]
-        ]
+    if recommendations:
+      response_data['recommendations'] = recommendations[:10]
     
     return jsonify(response_data), 200
 
@@ -272,7 +240,7 @@ def search_movies_by_description():
       400:
         description: Invalid input
     """
-    data = request.get_json()
+    data = request.get_json() or {}
     
     if 'query' not in data or not data['query']:
         return jsonify({'error': 'Query is required'}), 400
@@ -283,38 +251,28 @@ def search_movies_by_description():
     if limit > 50:
         limit = 50
     
-    # Extract preferences from query
-    preferences = llm_service.extract_movie_preferences(query)
-    
-    # Search movies based on extracted preferences
-    movies = []
-    
-    if preferences.get('genres'):
-        from services.recommendation_engine import RecommendationEngine
-        engine = RecommendationEngine()
-        
-        for genre in preferences['genres']:
-            genre_movies = engine.get_genre_based_recommendations(
-                genre, None, limit=limit
-            )
-            movies.extend(genre_movies)
-    
-    # Remove duplicates
-    seen = set()
-    unique_movies = []
-    for movie in movies:
-        if movie.id not in seen:
-            seen.add(movie.id)
-            unique_movies.append(movie)
-    
-    # If no movies found, return popular movies
-    if not unique_movies:
-        from services.recommendation_engine import RecommendationEngine
-        engine = RecommendationEngine()
-        unique_movies = engine.get_popular_movies(limit)
+    search_result = chat_orchestrator.search_movies(query=query, limit=limit)
+    unique_movies = search_result.get('movies', [])
+    intent = search_result.get('intent', {})
     
     return jsonify({
         'query': query,
-        'extracted_preferences': preferences,
-        'movies': [m.to_dict(include_stats=True) for m in unique_movies[:limit]]
+      'extracted_preferences': intent,
+      'rag_enabled': rag_service.is_available(),
+      'movies': unique_movies[:limit]
     }), 200
+
+
+@chatbot_bp.route('/rag/status', methods=['GET'])
+def rag_status():
+  """Get RAG availability status"""
+  return jsonify({
+    'rag_available': rag_service.is_available()
+  }), 200
+
+
+@chatbot_bp.route('/rag/reindex', methods=['POST'])
+def rag_reindex():
+  """Rebuild semantic index from current database movies"""
+  result = rag_service.rebuild_index()
+  return jsonify(result), 200

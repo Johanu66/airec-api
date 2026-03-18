@@ -43,6 +43,16 @@ class Config:
     LLM_API_KEY = os.getenv('LLM_API_KEY', '')
     LLM_MODEL = os.getenv('LLM_MODEL', 'gpt-3.5-turbo')
     LLM_API_URL = os.getenv('LLM_API_URL', 'https://api.openai.com/v1/chat/completions')
+    GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY', '')
+    GOOGLE_LLM_MODEL = os.getenv('GOOGLE_LLM_MODEL', 'gemini-2.5-flash')
+
+    # RAG Configuration
+    RAG_ENABLED = os.getenv('RAG_ENABLED', 'true').lower() == 'true'
+    RAG_CHROMA_PATH = os.getenv('RAG_CHROMA_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp', 'chroma_db'))
+    RAG_COLLECTION_NAME = os.getenv('RAG_COLLECTION_NAME', 'airec_movies')
+    RAG_EMBEDDING_MODEL = os.getenv('RAG_EMBEDDING_MODEL', 'all-MiniLM-L6-v2')
+    RAG_TOP_K = int(os.getenv('RAG_TOP_K', '8'))
+    RAG_MIN_RATINGS = int(os.getenv('RAG_MIN_RATINGS', '5'))
     
     # Redis Configuration (optional)
     REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')

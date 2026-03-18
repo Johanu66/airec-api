@@ -2,6 +2,11 @@ import requests
 import json
 from flask import current_app
 
+try:
+    import google.generativeai as genai
+except Exception:
+    genai = None
+
 
 class LLMService:
     """Service for interacting with LLM APIs (OpenAI, Claude, etc.)"""
@@ -10,12 +15,24 @@ class LLMService:
         self.api_key = None
         self.api_url = None
         self.model = None
+        self.google_api_key = None
+        self.google_model = None
+        self.google_client = None
     
-    def initialize(self, api_key, api_url, model):
+    def initialize(self, api_key, api_url, model, google_api_key=None, google_model='gemini-2.5-flash'):
         """Initialize the LLM service with configuration"""
         self.api_key = api_key
         self.api_url = api_url
         self.model = model
+        self.google_api_key = google_api_key
+        self.google_model = google_model
+
+        if self.google_api_key and genai is not None:
+            try:
+                genai.configure(api_key=self.google_api_key)
+                self.google_client = genai.GenerativeModel(self.google_model)
+            except Exception:
+                self.google_client = None
     
     def generate_response(self, messages, max_tokens=500):
         """
@@ -28,9 +45,16 @@ class LLMService:
         Returns:
             str: Generated response text
         """
-        if not self.api_key:
-            return "LLM service not configured. Please set LLM_API_KEY in environment."
-        
+        if self.api_key:
+            return self._generate_openai_compatible_response(messages, max_tokens=max_tokens)
+
+        if self.google_api_key and self.google_client:
+            return self._generate_google_response(messages)
+
+        return "LLM service not configured. Please set LLM_API_KEY or GOOGLE_API_KEY in environment."
+
+    def _generate_openai_compatible_response(self, messages, max_tokens=500):
+        """Call OpenAI-compatible chat completion APIs."""
         try:
             headers = {
                 'Content-Type': 'application/json',
@@ -54,8 +78,7 @@ class LLMService:
             if response.status_code == 200:
                 data = response.json()
                 return data['choices'][0]['message']['content']
-            else:
-                return f"Error: LLM API returned status {response.status_code}"
+            return f"Error: LLM API returned status {response.status_code}"
                 
         except requests.exceptions.Timeout:
             return "Error: LLM API request timed out"
@@ -63,6 +86,27 @@ class LLMService:
             return f"Error: Failed to connect to LLM API - {str(e)}"
         except Exception as e:
             return f"Error: {str(e)}"
+
+    def _generate_google_response(self, messages):
+        """Call Google Gemini API using the SDK."""
+        try:
+            prompt_parts = []
+            for msg in messages:
+                role = msg.get('role', 'user')
+                content = msg.get('content', '')
+                if role == 'system':
+                    prompt_parts.append(f"Instructions:\n{content}")
+                elif role == 'assistant':
+                    prompt_parts.append(f"Assistant:\n{content}")
+                else:
+                    prompt_parts.append(f"User:\n{content}")
+
+            prompt = "\n\n".join(prompt_parts)
+            response = self.google_client.generate_content(prompt)
+            text = getattr(response, 'text', None)
+            return text or "Error: Empty response from Gemini"
+        except Exception as e:
+            return f"Error: Gemini request failed - {str(e)}"
     
     def get_movie_recommendations_from_prompt(self, prompt, movie_context=""):
         """

@@ -93,7 +93,9 @@ def create_app(config_name='development'):
     llm_service.initialize(
         app.config['LLM_API_KEY'],
         app.config['LLM_API_URL'],
-        app.config['LLM_MODEL']
+        app.config['LLM_MODEL'],
+        app.config.get('GOOGLE_API_KEY', ''),
+        app.config.get('GOOGLE_LLM_MODEL', 'gemini-2.5-flash')
     )
     if app.config['LLM_API_KEY']:
         app.logger.info(f'LLM configured with model: {app.config["LLM_MODEL"]}')

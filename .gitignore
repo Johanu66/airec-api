@@ -15,3 +15,6 @@ tmp/app.log.*
 
 # Local datasets
 tmp/ml-1m/
+tmp/movie-chatbot-1/
+# Jupyter Notebook
+tmp/script3.ipynb
