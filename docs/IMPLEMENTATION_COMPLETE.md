@@ -127,7 +127,7 @@ HTTP RESPONSE
 ### Environment Variables (`.env`)
 ```bash
 # Google Gemini LLM
-GOOGLE_API_KEY=AIzaSyDGhUu6dslKBYGr9adImnA9aj-u2Nsn2s8
+GOOGLE_API_KEY=your-google-api-key
 GOOGLE_LLM_MODEL=gemini-2.5-flash
 
 # RAG Configuration

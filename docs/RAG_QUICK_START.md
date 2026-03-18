@@ -38,7 +38,7 @@ If anything breaks:
 ### Environment Variables (`.env`)
 ```bash
 # LLM Provider
-GOOGLE_API_KEY=AIzaSyDGhUu6dslKBYGr9adImnA9aj-u2Nsn2s8  # Your Gemini API key
+GOOGLE_API_KEY=your-google-api-key  # Your Gemini API key
 GOOGLE_LLM_MODEL=gemini-2.5-flash
 
 # RAG Settings

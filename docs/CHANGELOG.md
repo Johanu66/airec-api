@@ -259,7 +259,7 @@ google-generativeai==0.8.3
 ### `.env`
 **Added** new configuration variables:
 ```bash
-GOOGLE_API_KEY=AIzaSyDGhUu6dslKBYGr9adImnA9aj-u2Nsn2s8
+GOOGLE_API_KEY=your-google-api-key
 GOOGLE_LLM_MODEL=gemini-2.5-flash
 RAG_ENABLED=true
 RAG_CHROMA_PATH=/home/tqffjfwm/airec-api/tmp/chroma_db
