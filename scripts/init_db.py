@@ -18,7 +18,7 @@ import argparse
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app
-from models import db, User, Movie, Rating
+from models import db, User, Movie, Rating, Genre
 
 
 def init_database(app):
@@ -88,12 +88,14 @@ def seed_database(app):
                 )
                 user.set_password(user_data['password'])
                 db.session.add(user)
-                db.session.flush()
-                
-                # Add preferences
-                prefs = UserPreferences(user_id=user.id)
-                prefs.set_favorite_genres(user_data['genres'])
-                db.session.add(prefs)
+
+                # Add favorite genres
+                for genre_name in user_data['genres']:
+                    genre = Genre.query.filter_by(name=genre_name).first()
+                    if not genre:
+                        genre = Genre(name=genre_name)
+                        db.session.add(genre)
+                    user.favorite_genres.append(genre)
                 
                 print(f"Created user: {user.email}")
         
@@ -104,35 +106,35 @@ def seed_database(app):
             {
                 'id': 1,
                 'title': 'The Shawshank Redemption',
-                'genres': 'Drama',
+                'genres': ['Drama'],
                 'release_year': 1994,
                 'description': 'Two imprisoned men bond over a number of years, finding solace and eventual redemption through acts of common decency.'
             },
             {
                 'id': 2,
                 'title': 'The Godfather',
-                'genres': 'Crime|Drama',
+                'genres': ['Crime', 'Drama'],
                 'release_year': 1972,
                 'description': 'The aging patriarch of an organized crime dynasty transfers control of his clandestine empire to his reluctant son.'
             },
             {
                 'id': 3,
                 'title': 'The Dark Knight',
-                'genres': 'Action|Crime|Drama',
+                'genres': ['Action', 'Crime', 'Drama'],
                 'release_year': 2008,
                 'description': 'When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests.'
             },
             {
                 'id': 4,
                 'title': 'Pulp Fiction',
-                'genres': 'Crime|Thriller',
+                'genres': ['Crime', 'Thriller'],
                 'release_year': 1994,
                 'description': 'The lives of two mob hitmen, a boxer, a gangster and his wife intertwine in four tales of violence and redemption.'
             },
             {
                 'id': 5,
                 'title': 'Forrest Gump',
-                'genres': 'Comedy|Drama|Romance',
+                'genres': ['Comedy', 'Drama', 'Romance'],
                 'release_year': 1994,
                 'description': 'The presidencies of Kennedy and Johnson, the Vietnam War, and other historical events unfold from the perspective of an Alabama man.'
             }
@@ -141,7 +143,20 @@ def seed_database(app):
         for movie_data in movies_data:
             existing = Movie.query.get(movie_data['id'])
             if not existing:
-                movie = Movie(**movie_data)
+                movie = Movie(
+                    id=movie_data['id'],
+                    title=movie_data['title'],
+                    release_year=movie_data['release_year'],
+                    description=movie_data['description']
+                )
+
+                for genre_name in movie_data['genres']:
+                    genre = Genre.query.filter_by(name=genre_name).first()
+                    if not genre:
+                        genre = Genre(name=genre_name)
+                        db.session.add(genre)
+                    movie.genres_list.append(genre)
+
                 db.session.add(movie)
                 print(f"Created movie: {movie.title}")
         

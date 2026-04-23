@@ -5,26 +5,57 @@ from services.chat_retrieval_service import chat_retrieval_service
 
 
 GENRE_ALIASES = {
+    # Anglais
     'action': 'Action',
     'comedy': 'Comedy',
-    'comedie': 'Comedy',
-    'comédie': 'Comedy',
     'drama': 'Drama',
-    'drame': 'Drama',
     'horror': 'Horror',
-    'horreur': 'Horror',
     'romance': 'Romance',
     'thriller': 'Thriller',
     'crime': 'Crime',
     'adventure': 'Adventure',
-    'aventure': 'Adventure',
     'animation': 'Animation',
     'fantasy': 'Fantasy',
-    'fantastique': 'Fantasy',
     'mystery': 'Mystery',
     'science-fiction': 'Sci-Fi',
+    'science fiction': 'Sci-Fi',
     'sci-fi': 'Sci-Fi',
-    'sf': 'Sci-Fi'
+    'scifi': 'Sci-Fi',
+    'sf': 'Sci-Fi',
+    'war': 'War',
+    'western': 'Western',
+    'musical': 'Musical',
+    # Français
+    'comedie': 'Comedy',
+    'comédie': 'Comedy',
+    'comique': 'Comedy',
+    'drame': 'Drama',
+    'horreur': 'Horror',
+    'romantique': 'Romance',
+    'aventure': 'Adventure',
+    'animé': 'Animation',
+    'anime': 'Animation',
+    'fantastique': 'Fantasy',
+    'mystère': 'Mystery',
+    'policier': 'Crime',
+    'guerre': 'War',
+    'documentaire': 'Documentary',
+    # Termes familiers / sous-genres
+    'comics': 'Action',
+    'comic': 'Action',
+    'superhero': 'Action',
+    'super-héros': 'Action',
+    'super héros': 'Action',
+    'marvel': 'Action',
+    'effrayant': 'Horror',
+    'peur': 'Horror',
+    'amour': 'Romance',
+    'drôle': 'Comedy',
+    'rigoler': 'Comedy',
+    'rire': 'Comedy',
+    'violent': 'Action',
+    'suspense': 'Thriller',
+    'espionnage': 'Thriller',
 }
 
 
@@ -76,7 +107,12 @@ class ChatOrchestrator:
             intent['rating_min'] = 4.0
             intent['type'] = 'criteria'
 
-        if any(k in text for k in ['populaire', 'popular', 'tendance', 'trending']):
+        if any(k in text for k in ['populaire', 'popular', 'tendance', 'trending',
+                                    'propose', 'proposes', 'proposer',
+                                    'recommande', 'recommandes', 'recommander',
+                                    'suggestion', 'conseil', 'conseille',
+                                    'quoi regarder', 'quoi voir', 'que voir',
+                                    'quoi comme film', 'quoi comme']):
             intent['type'] = 'popular'
 
         if any(k in text for k in ['comme', 'similaire', 'similar', 'like']):
@@ -92,7 +128,9 @@ class ChatOrchestrator:
 
         semantic_triggers = [
             'émouvant', 'emouvant', 'profond', 'intense', 'relaxant', 'qui fait réfléchir',
-            'atmosphère', 'ambiance', 'theme', 'thème', 'vibe'
+            'atmosphère', 'ambiance', 'theme', 'thème', 'vibe',
+            'touchant', 'inspirant', 'feel good', 'feel-good', 'réconfortant',
+            'triste', 'joyeux', 'stressant', 'détente', 'poignant',
         ]
         if any(k in text for k in semantic_triggers):
             intent['type'] = 'semantic'
@@ -104,18 +142,21 @@ class ChatOrchestrator:
         for idx, m in enumerate(movies[:10], start=1):
             genres = ', '.join(m.get('genres') or [])
             movie_lines.append(
-                f"{idx}. {m['title']} ({m.get('release_year') or 'N/A'}) - {genres} - rating {m.get('average_rating', 0)}/5"
+                f"{idx}. {m['title']} ({m.get('release_year') or 'N/A'}) - {genres} - note {m.get('average_rating', 0)}/5"
             )
 
-        catalog = '\n'.join(movie_lines) if movie_lines else 'Aucun film trouvé.'
+        catalog = '\n'.join(movie_lines) if movie_lines else 'Aucun film trouvé dans cette catégorie.'
 
         return (
-            "You are an assistant for movie recommendations. "
-            "Never invent movies. Recommend only from the catalog below. "
-            "If a requested movie is not in the catalog, say it is unavailable in the current database.\n\n"
-            "Catalog:\n"
+            "Tu es un assistant sympathique spécialisé dans les recommandations de films. "
+            "Réponds TOUJOURS en français, de manière chaleureuse et concise (3-4 lignes max). "
+            "Ne recommande JAMAIS un film qui n'est pas dans le catalogue ci-dessous. "
+            "Si le genre demandé n'existe pas en tant que tel (ex: 'comics', 'superhéros'), "
+            "propose des films d'Action/Aventure du catalogue qui peuvent correspondre. "
+            "Si vraiment aucun film ne correspond, dis-le clairement et propose une alternative.\n\n"
+            "Catalogue disponible :\n"
             f"{catalog}\n\n"
-            "Response style: short, friendly, and practical."
+            "Réponds directement à la demande en citant uniquement des films du catalogue."
         )
 
     def _build_user_message(self, message, conversation_history):
@@ -139,11 +180,55 @@ class ChatOrchestrator:
         ], max_tokens=420)
 
         if isinstance(response, str) and response.lower().startswith('error:'):
-            if movies:
-                return "Voici des films recommandés selon ta demande."
-            return "Je n'ai pas trouvé de films pertinents pour cette demande pour le moment."
+            return self._fallback_response(message, movies)
 
         return response
+
+    def _fallback_response(self, message, movies):
+        """Réponse contextuelle dynamique quand le LLM est indisponible."""
+        import random
+        text = message.lower()
+
+        if any(k in text for k in ['triste', 'déprime', 'déprimé', 'mal', 'sad']):
+            intro = random.choice([
+                "Je comprends... Un bon film peut aider ! Voici mes suggestions :",
+                "Les moments difficiles passent mieux avec un film. Voici ce que je te recommande :",
+            ])
+        elif any(k in text for k in ['heureux', 'content', 'envie', 'happy', 'bonne humeur', 'joyeux']):
+            intro = random.choice([
+                "Super ambiance ! Voici mes recommandations pour ce soir :",
+                "Parfait pour une bonne soirée ! Voici mes suggestions :",
+            ])
+        elif any(k in text for k in ['action']):
+            intro = random.choice([
+                "Pour une dose d'adrénaline, voici les meilleurs films d'action :",
+                "Tu veux du rythme et de l'action ? Voici mes recommandations :",
+            ])
+        elif any(k in text for k in ['comédie', 'comedy', 'rire', 'drôle', 'fun']):
+            intro = random.choice([
+                "Pour bien rire, voici mes comédies préférées :",
+                "Tu veux te marrer ? Voici ce que je te propose :",
+            ])
+        elif any(k in text for k in ['horreur', 'horror', 'peur', 'effrayant']):
+            intro = random.choice([
+                "Pour frissonner ce soir, voici mes sélections :",
+                "Tu aimes avoir peur ? Voici mes recommandations :",
+            ])
+        elif any(k in text for k in ['drame', 'drama', 'émouvant', 'profond']):
+            intro = random.choice([
+                "Pour quelque chose d'intense et émouvant, voici mes suggestions :",
+                "Voici des films forts qui vont te marquer :",
+            ])
+        elif movies:
+            intro = random.choice([
+                "Voici les films qui correspondent à ta demande :",
+                "J'ai trouvé ces films pour toi :",
+                "Voici ce que je te recommande :",
+            ])
+        else:
+            intro = "Je n'ai pas trouvé de films correspondant exactement à ta demande, mais voici des suggestions populaires :"
+
+        return intro
 
     def _retrieve_movies(self, message, intent, limit, user_id=None):
         if intent['type'] == 'criteria':
@@ -172,7 +257,13 @@ class ChatOrchestrator:
             if semantic_movies:
                 return semantic_movies
 
-        # fallback
+        # Pour les requêtes générales, tenter la recherche sémantique pour varier les résultats
+        if intent['type'] in ('general', 'popular') and rag_service.is_available():
+            semantic_movies = rag_service.semantic_search(message, n_results=limit)
+            if semantic_movies:
+                return semantic_movies
+
+        # fallback : films populaires (avec genre si détecté)
         return chat_retrieval_service.popular_movies(
             genre=intent.get('genre'),
             limit=limit

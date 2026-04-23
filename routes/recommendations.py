@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from services.recommendation_engine import RecommendationEngine
+from models import Movie, UserRecommendationProfile, TypeRecommendation
 from utils.jwt_handler import token_required, get_current_user
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_jwt_extended.exceptions import NoAuthorizationError
@@ -49,6 +50,53 @@ def get_user_recommendations():
     movies = [movie.to_dict(include_stats=True) for movie in recommendations]
     
     return jsonify({'recommendations': movies}), 200
+
+
+@recommendations_bp.route('/user-segment', methods=['GET'])
+@token_required
+def get_user_segment_recommendations():
+    """
+    Get personalized recommendations from precomputed user segment profile
+    ---
+    tags:
+      - Recommendations
+    security:
+      - Bearer: []
+    parameters:
+      - name: limit
+        in: query
+        type: integer
+        default: 10
+        description: Number of recommendations to return
+    responses:
+      200:
+        description: List of segment-based recommendations
+    """
+    user_id = get_current_user()
+    limit = request.args.get('limit', 10, type=int)
+
+    if limit > 50:
+        limit = 50
+
+    recommendations = engine.get_segment_based_recommendations(user_id, limit)
+    movies = [movie.to_dict(include_stats=True) for movie in recommendations]
+
+    return jsonify({'recommendations': movies}), 200
+
+
+@recommendations_bp.route('/segments/status', methods=['GET'])
+def get_segments_status():
+    """Return status of precomputed segment recommendation data."""
+    profiles_count = UserRecommendationProfile.query.count()
+    rows_count = TypeRecommendation.query.count()
+    types_count = len({r.id_type for r in TypeRecommendation.query.with_entities(TypeRecommendation.id_type).all()})
+
+    return jsonify({
+        'profiles_count': profiles_count,
+        'type_recommendation_rows': rows_count,
+        'types_count': types_count,
+        'ready': profiles_count > 0 and rows_count > 0
+    }), 200
 
 
 @recommendations_bp.route('/category/<string:genre>', methods=['GET'])
@@ -200,11 +248,12 @@ def get_similar_movies(movie_id):
     
     if limit > 50:
         limit = 50
+
+    movie = Movie.query.get(movie_id)
+    if not movie:
+        return jsonify({'error': 'Movie not found'}), 404
     
     similar_movies = engine.get_similar_movies(movie_id, limit)
-    
-    if not similar_movies and similar_movies != []:
-        return jsonify({'error': 'Movie not found'}), 404
     
     movies = [movie.to_dict(include_stats=True) for movie in similar_movies]
     

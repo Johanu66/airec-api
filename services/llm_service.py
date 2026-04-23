@@ -37,16 +37,19 @@ class LLMService:
     def generate_response(self, messages, max_tokens=500):
         """
         Generate a response from the LLM
-        
+
         Args:
             messages: List of message dicts with 'role' and 'content'
             max_tokens: Maximum tokens in response
-        
+
         Returns:
             str: Generated response text
         """
         if self.api_key:
-            return self._generate_openai_compatible_response(messages, max_tokens=max_tokens)
+            result = self._generate_openai_compatible_response(messages, max_tokens=max_tokens)
+            if not (isinstance(result, str) and result.lower().startswith('error:')):
+                return result
+            # OpenAI failed (invalid key, quota, etc.) — fall through to Google
 
         if self.google_api_key and self.google_client:
             return self._generate_google_response(messages)
@@ -174,7 +177,7 @@ Only include fields that are clearly mentioned or strongly implied.'''
             # Try to parse as JSON
             preferences = json.loads(response)
             return preferences
-        except:
+        except (json.JSONDecodeError, ValueError, KeyError):
             # If parsing fails, return empty preferences
             return {
                 'genres': [],

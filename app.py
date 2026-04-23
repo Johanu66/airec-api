@@ -80,7 +80,7 @@ def create_app(config_name='development'):
     db.init_app(app)
     
     app.logger.info('Configuring CORS...')
-    CORS(app, resources={r"/api/*": {"origins": app.config['CORS_ORIGINS']}})
+    CORS(app, resources={r"/*": {"origins": app.config['CORS_ORIGINS']}})
     
     app.logger.info('Initializing JWT...')
     jwt = JWTManager(app)

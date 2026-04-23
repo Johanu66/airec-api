@@ -1,7 +1,5 @@
-import numpy as np
 from sqlalchemy import func
-from models import db, Movie, Rating, Genre
-from collections import defaultdict
+from models import db, Movie, Rating, Genre, User, UserRecommendationProfile, TypeRecommendation
 
 
 class RecommendationEngine:
@@ -12,31 +10,114 @@ class RecommendationEngine:
         self.user_similarity = None
     
     def get_user_based_recommendations(self, user_id, limit=10):
-        """Get personalized recommendations based on collaborative filtering"""
+        """Get personalized recommendations using hybrid strategy.
+
+        Priority:
+        1) Collaborative filtering
+        2) Segment-based precomputed recommendations (KMeans id_type)
+        3) Popular movies fallback
+        """
         
         # Get user's ratings
         user_ratings = Rating.query.filter_by(user_id=user_id).all()
         
         if not user_ratings:
-            # If user has no ratings, return popular movies
-            return self.get_popular_movies(limit)
+            # Cold-start: try segment recommendations first, then fallback to popular.
+            segment_movies = self.get_segment_based_recommendations(user_id, limit)
+            if len(segment_movies) >= limit:
+                return segment_movies[:limit]
+
+            popular_movies = self.get_popular_movies(limit)
+            return self._merge_movie_lists(segment_movies, popular_movies, limit)
         
         user_rated_movie_ids = {r.movie_id for r in user_ratings}
         
         # Find similar users based on common movie ratings
         similar_users = self._find_similar_users(user_id, user_rated_movie_ids)
         
+        segment_movies = self.get_segment_based_recommendations(user_id, limit)
+
         if not similar_users:
+            if segment_movies:
+                if len(segment_movies) >= limit:
+                    return segment_movies[:limit]
+                return self._merge_movie_lists(segment_movies, self.get_popular_movies(limit), limit)
             return self.get_popular_movies(limit)
         
         # Get movies rated highly by similar users
-        recommendations = self._get_recommendations_from_similar_users(
+        collaborative_movies = self._get_recommendations_from_similar_users(
             similar_users,
             user_rated_movie_ids,
             limit
         )
-        
-        return recommendations
+
+        # Merge with segment-based recommendations to improve coverage/diversity.
+        merged = self._merge_movie_lists(collaborative_movies, segment_movies, limit)
+
+        if len(merged) < limit:
+            merged = self._merge_movie_lists(merged, self.get_popular_movies(limit), limit)
+
+        return merged
+
+    def get_segment_based_recommendations(self, user_id, limit=10, model_version='v1'):
+        """Get recommendations from precomputed user segment (`id_type`) rankings."""
+        profile = UserRecommendationProfile.query.filter_by(
+            user_id=user_id,
+            model_version=model_version
+        ).first()
+
+        if not profile:
+            return []
+
+        rated_movie_ids = {
+            r.movie_id for r in Rating.query.filter_by(user_id=user_id).all()
+        }
+
+        rows = TypeRecommendation.query.filter_by(
+            id_type=profile.id_type,
+            model_version=model_version
+        ).order_by(
+            TypeRecommendation.rank.asc(),
+            TypeRecommendation.score.desc()
+        ).limit(limit * 8).all()
+
+        if not rows:
+            return []
+
+        movie_ids = []
+        for row in rows:
+            if row.movie_id not in rated_movie_ids:
+                movie_ids.append(row.movie_id)
+            if len(movie_ids) >= limit:
+                break
+
+        if not movie_ids:
+            return []
+
+        movies = Movie.query.filter(Movie.id.in_(movie_ids)).all()
+        movie_dict = {m.id: m for m in movies}
+        return [movie_dict[mid] for mid in movie_ids if mid in movie_dict]
+
+    def _merge_movie_lists(self, primary, secondary, limit):
+        """Merge two movie lists preserving order and uniqueness."""
+        merged = []
+        seen = set()
+
+        for movie in primary:
+            if movie.id not in seen:
+                seen.add(movie.id)
+                merged.append(movie)
+                if len(merged) >= limit:
+                    return merged
+
+        for movie in secondary:
+            if movie.id not in seen:
+                seen.add(movie.id)
+                merged.append(movie)
+                if len(merged) >= limit:
+                    return merged
+
+        return merged
     
     def _find_similar_users(self, user_id, user_rated_movie_ids, limit=50):
         """Find users with similar rating patterns"""
@@ -160,15 +241,13 @@ class RecommendationEngine:
             )
             
             # Get recommendations based on user's favorite genres
-            preferences = UserPreferences.query.filter_by(user_id=user_id).first()
-            if preferences:
-                favorite_genres = preferences.get_favorite_genres()
-                if favorite_genres:
-                    # Get movies from user's favorite genre
-                    genre_movies = self.get_genre_based_recommendations(
-                        favorite_genres[0], user_id, limit=10
-                    )
-                    recommendations['trending'] = genre_movies
+            user = User.query.get(user_id)
+            if user and user.favorite_genres:
+                favorite_genres = [g.name for g in user.favorite_genres]
+                genre_movies = self.get_genre_based_recommendations(
+                    favorite_genres[0], user_id, limit=10
+                )
+                recommendations['trending'] = genre_movies
         
         # If no personalized or trending, use popular for trending
         if not recommendations['trending']:

@@ -1,240 +1,401 @@
-# AiRec API - Movie Recommendation System
+# AiRec API
 
-A comprehensive Flask-based REST API for movie recommendations with AI-powered chatbot integration.
+Flask REST API for movie discovery, ratings, personalized recommendations, and an AI-assisted movie chatbot.
 
-## Features
+This README reflects the current codebase structure in `app.py`, `routes/`, `services/`, `scripts/`, and `models/__init__.py`.
 
-- **User Authentication**: JWT-based authentication with secure password hashing
-- **Movie Database**: Complete movie catalog with ratings and metadata
-- **Rating System**: User movie ratings (0.5 to 5.0 scale)
-- **Recommendation Engine**: 
-  - Collaborative filtering based on user similarities
-  - Genre-based recommendations
-  - Personalized home page recommendations
-- **AI Chatbot**: LLM-powered conversational movie recommendations
-- **RESTful API**: Complete REST API with Swagger documentation
-- **MySQL Database**: Optimized database schema with indexes
-- **Comprehensive Logging**: Automatic log rotation and tracking in `tmp/` directory
+## What The API Does
 
-## Technology Stack
+- JWT authentication with token blacklist support
+- Movie catalog browsing with filtering, pagination, and rating stats
+- User profile and favorite genre management
+- Movie rating CRUD for authenticated users
+- Recommendation engine with three layers:
+  - collaborative filtering from overlapping user ratings
+  - precomputed segment recommendations from KMeans clustering
+  - popularity and genre fallbacks
+- Chatbot endpoints with:
+  - rule-based intent detection
+  - SQL retrieval
+  - optional semantic RAG over the movie catalog
+  - optional LLM generation constrained to retrieved movies
+- Swagger UI served by Flasgger
+- Utility scripts for database setup, MovieLens import, TMDB enrichment, segment builds, RAG rebuild, and log inspection
 
-- **Framework**: Flask 3.0
-- **Database**: MySQL (via SQLAlchemy ORM)
-- **Authentication**: JWT (Flask-JWT-Extended)
-- **Documentation**: Swagger/Flasgger
-- **External APIs**: TMDB for movie posters/metadata
-- **AI/LLM**: OpenAI/Claude/Mistral integration for chatbot
+## Stack
 
-## Installation
+- Flask 3
+- SQLAlchemy + Flask-Migrate
+- MySQL via `PyMySQL`
+- JWT via `Flask-JWT-Extended`
+- Swagger via `flasgger`
+- Optional RAG via `chromadb` + `sentence-transformers`
+- Optional LLM backends:
+  - OpenAI-compatible chat-completions endpoint
+  - Google Gemini fallback
+
+## Repository Layout
+
+- `app.py`: application factory, logging, Swagger, blueprint registration, root and health endpoints
+- `config.py`: environment-driven configuration
+- `models/__init__.py`: SQLAlchemy models and association tables
+- `routes/`: API blueprints
+- `services/`: recommendation, chatbot retrieval, orchestration, LLM, and RAG services
+- `utils/`: JWT helpers and input validators
+- `scripts/`: operational and data-loading scripts
+- `postman_collection.json`: partial Postman collection for the API
+- `tmp/`: logs and local Chroma persistence
+
+## Setup
 
 ### Prerequisites
 
 - Python 3.8+
-- MySQL 5.7+
-- pip
+- MySQL 5.7+ or MySQL 8+
+- `pip`
 
-### Setup
+### Install
 
-1. **Clone the repository**
 ```bash
 git clone <repository-url>
 cd airec-api
-```
-
-2. **Create virtual environment**
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-3. **Install dependencies**
-```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-4. **Configure environment**
+### Configure Environment
+
+Start from the example file:
+
 ```bash
 cp .env.example .env
-# Edit .env with your configuration
 ```
 
-5. **Create MySQL database**
+Core variables already expected by the app:
+
+```env
+SECRET_KEY=change-me
+FLASK_ENV=development
+
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=your-password
+DB_NAME=airec_db
+
+JWT_SECRET_KEY=change-me-too
+CORS_ORIGINS=*
+LOG_LEVEL=INFO
+
+TMDB_API_KEY=
+
+LLM_API_KEY=
+LLM_MODEL=gpt-3.5-turbo
+LLM_API_URL=https://api.openai.com/v1/chat/completions
+```
+
+Additional optional variables used by the current code but not listed in `.env.example` by default:
+
+```env
+GOOGLE_API_KEY=
+GOOGLE_LLM_MODEL=gemini-2.5-flash
+
+RAG_ENABLED=true
+RAG_CHROMA_PATH=/absolute/or/relative/path/to/chroma_db
+RAG_COLLECTION_NAME=airec_movies
+RAG_EMBEDDING_MODEL=all-MiniLM-L6-v2
+RAG_TOP_K=8
+RAG_MIN_RATINGS=5
+
+USE_REDIS=false
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+```
+
+### Create The Database
+
 ```sql
 CREATE DATABASE airec_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-6. **Initialize database**
+### Start The API
+
 ```bash
 python app.py
 ```
 
-## Configuration
+The API will be available at `http://localhost:5000`.
 
-Edit `.env` file with your settings:
+Useful built-in endpoints:
 
-```env
-# Database
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=your_password
-DB_NAME=airec_db
+- `GET /`
+- `GET /health`
+- `GET /swagger/`
+- `GET /apispec.json`
 
-# Security
-SECRET_KEY=your-secret-key
-JWT_SECRET_KEY=your-jwt-secret
+Notes:
 
-# External APIs
-TMDB_API_KEY=your-tmdb-api-key
-LLM_API_KEY=your-llm-api-key
-LLM_MODEL=gpt-3.5-turbo
+- `app.py` calls `db.create_all()` at startup, so missing tables are created automatically.
+- `run.py` and `passenger_wsgi.py` are provided for WSGI/Passenger deployment.
 
-# Logging
-LOG_LEVEL=INFO
+## API Surface
 
-# CORS
-CORS_ORIGINS=*
-```
+### System
 
-## Running the Application
+- `GET /`: API metadata
+- `GET /health`: health check
 
-### Development Mode
+### Authentication
+
+- `POST /api/auth/register`: create a user with optional `favorite_genres`
+- `POST /api/auth/login`: returns `access_token`, `refresh_token`, and user payload
+- `POST /api/auth/logout`: revoke current JWT
+- `POST /api/auth/refresh`: generate a fresh access token
+
+Registration rules enforced by the API:
+
+- valid email format
+- password minimum 8 chars
+- at least one uppercase letter
+- at least one lowercase letter
+- at least one digit
+
+### User
+
+- `GET /api/user/profile`: current user profile with recent ratings
+- `PUT /api/user/profile`: update `nom`, `prenom`, and `favorite_genres`
+- `GET /api/user/ratings`: paginated ratings by current user
+- `GET /api/user/preferences`: favorite genres for current user
+- `PUT /api/user/preferences`: replace favorite genres list
+
+### Movies
+
+- `GET /api/movies`
+  - filters: `page`, `per_page`, `genre`, `year`, `min_rating`, `search`, `sort_by`, `order`
+  - `sort_by` supports `title`, `year`, `rating`
+- `GET /api/movies/<movie_id>`: single movie with stats
+- `GET /api/movies/featured`: top rated, heavily rated movies
+- `GET /api/movies/<movie_id>/ratings`: paginated ratings for a movie
+
+### Categories
+
+- `GET /api/categories`: MovieLens-style genre list
+- `GET /api/categories/<genre>/movies`
+  - filters: `page`, `per_page`, `sort_by`
+  - `sort_by` supports `popularity`, `rating`, `title`, `year`
+
+### Ratings
+
+- `POST /api/movies/<movie_id>/ratings`: create or update the authenticated user's rating
+- `GET /api/movies/<movie_id>/ratings/user`: get the authenticated user's rating for that movie
+- `DELETE /api/movies/<movie_id>/ratings/<rating_id>`: delete the authenticated user's rating
+
+Rating validation:
+
+- numeric value only
+- range `0.5` to `5.0`
+- increments of `0.5`
+
+### Recommendations
+
+- `GET /api/recommendations/user`: hybrid personalized recommendations for current user
+- `GET /api/recommendations/user-segment`: recommendations from precomputed user segment data
+- `GET /api/recommendations/segments/status`: status of segment profile tables
+- `GET /api/recommendations/category/<genre>`: genre recommendations
+- `GET /api/recommendations/home`: `personalized`, `popular`, and `trending` sections
+- `GET /api/recommendations/similar/<movie_id>`: similar movies based on overlapping genres
+
+Recommendation behavior in the current code:
+
+- `/user` first tries collaborative filtering
+- it then merges segment recommendations when available
+- it falls back to popular movies when needed
+- `/home` optionally personalizes results when a JWT is present
+
+### Chatbot
+
+- `POST /api/chatbot/query`
+  - accepts `message`
+  - optional `session_id`
+  - works anonymously or with JWT
+  - stores conversation history in `chatbot_sessions`
+- `GET /api/chatbot/history`: authenticated history listing, with optional `session_id`
+- `DELETE /api/chatbot/session/<session_id>`: delete one authenticated user's session
+- `POST /api/chatbot/search`: search by natural-language description
+- `GET /api/chatbot/rag/status`: whether semantic RAG is available
+- `POST /api/chatbot/rag/reindex`: rebuild the Chroma index from database content
+
+Chatbot behavior in the current code:
+
+- intent detection is rule-based and supports French and English keywords
+- the orchestrator can use:
+  - SQL filtering by genre/year/rating
+  - popularity retrieval
+  - "similar to" lookup
+  - semantic search through RAG when enabled
+- the LLM is instructed to recommend only movies from the retrieved catalog
+- if the LLM is unavailable, the service returns a fallback French response
+
+## Data Model
+
+Current SQLAlchemy tables and relationships:
+
+- `users`
+  - fields: `id`, `email`, `password_hash`, `nom`, `prenom`, `is_imported`, timestamps
+- `genres`
+  - normalized genre catalog
+- `movies`
+  - fields: `id`, `title`, `release_year`, `description`, `poster_url`, `backdrop_url`, `tmdb_id`, `imdb_id`, `created_at`
+- `ratings`
+  - fields: `id`, `user_id`, `movie_id`, `rating`, `timestamp`
+  - unique constraint on `(user_id, movie_id)`
+- `movie_genres`
+  - many-to-many association between `movies` and `genres`
+- `user_favorite_genres`
+  - many-to-many association between `users` and `genres`
+- `chatbot_sessions`
+  - stores conversation history as JSON text
+- `token_blacklist`
+  - revoked JWT identifiers
+- `user_recommendation_profiles`
+  - one row per user segment assignment and profile vector
+- `type_recommendations`
+  - precomputed ranked movie recommendations per segment and model version
+
+Important model notes:
+
+- favorite genres are no longer stored in a `user_preferences` table
+- imported MovieLens users are marked with `is_imported=True`
+- imported users are blocked from authenticating through `/api/auth/login`
+
+## Services Overview
+
+### `services/recommendation_engine.py`
+
+- collaborative filtering from overlapping ratings
+- segment-based fallback via `user_recommendation_profiles` and `type_recommendations`
+- genre recommendations with rating-count thresholds
+- home feed composition
+
+### `services/chat_retrieval_service.py`
+
+- SQL retrieval with rating stats subqueries
+- search by criteria, title, popularity, similarity, and IDs
+
+### `services/chat_orchestrator.py`
+
+- detects user intent from text
+- routes requests to retrieval or RAG
+- builds a constrained prompt for the LLM
+
+### `services/llm_service.py`
+
+- OpenAI-compatible HTTP client
+- Google Gemini fallback if configured
+- fallback text if no provider is available
+
+### `services/rag_service.py`
+
+- optional Chroma persistent store in `tmp/chroma_db` by default
+- embeddings via `sentence-transformers`
+- semantic search over movie title, genres, year, and description
+
+## Operational Scripts
+
+### Database Management
+
 ```bash
-python app.py
+python scripts/init_db.py init
+python scripts/init_db.py reset
+python scripts/init_db.py seed
 ```
 
-The API will be available at `http://localhost:5000`
+- `init`: create all tables
+- `reset`: drop and recreate all tables after interactive confirmation
+- `seed`: insert sample users, genres, movies, and ratings
 
-### Production Mode (with Passenger)
-The application is configured to work with Passenger WSGI. The `passenger_wsgi.py` and `run.py` files are configured for deployment.
+### Import MovieLens Data
 
-## API Documentation
+The importer currently targets MovieLens 1M style `.dat` files, not CSV.
 
-Once the application is running, visit:
-- **Swagger UI**: http://localhost:5000/swagger/
-- **API Spec**: http://localhost:5000/apispec.json
-
-## Additional Documentation
-
-Project documentation has been centralized in the docs folder:
-
-- [Quick Start](docs/QUICKSTART.md)
-- [API Testing Guide](docs/API_TESTING.md)
-- [Logging Guide](docs/LOGGING.md)
-- [Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)
-- [RAG Quick Start](docs/RAG_QUICK_START.md)
-- [RAG Documentation Index](docs/README_RAG.md)
-- [RAG Complete Implementation](docs/IMPLEMENTATION_COMPLETE.md)
-- [Implementation Checklist](docs/IMPLEMENTATION_CHECKLIST.md)
-- [Final Summary](docs/FINAL_SUMMARY.md)
-- [Changelog](docs/CHANGELOG.md)
-
-## Data Import
-
-### Import MovieLens Dataset
-
-1. **Download MovieLens dataset**
 ```bash
-wget https://files.grouplens.org/datasets/movielens/ml-latest-small.zip
-unzip ml-latest-small.zip
+python scripts/import_movielens.py /path/to/ml-1m
 ```
 
-2. **Import movies and ratings**
+Or:
+
 ```bash
 python scripts/import_movielens.py \
-  --movies ml-latest-small/movies.csv \
-  --ratings ml-latest-small/ratings.csv \
-  --format csv
-```
-
-For large datasets, limit ratings:
-```bash
-python scripts/import_movielens.py \
-  --movies movies.csv \
-  --ratings ratings.csv \
+  --movies /path/to/movies.dat \
+  --ratings /path/to/ratings.dat \
+  --users /path/to/users.dat \
   --limit-ratings 100000
 ```
 
-### Fetch Movie Posters from TMDB
+Behavior:
 
-After importing movies, fetch posters and metadata:
+- clears imported MovieLens data after confirmation
+- imports normalized genres
+- imports movies
+- imports synthetic imported users
+- imports ratings with timestamp preservation
+
+### Enrich Movies With TMDB
+
 ```bash
 python scripts/fetch_posters.py --limit 100
 ```
 
-## API Endpoints
+This fills missing values such as:
 
-### Authentication
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - User login
-- `POST /api/auth/logout` - User logout
-- `POST /api/auth/refresh` - Refresh access token
+- `tmdb_id`
+- `description`
+- `poster_url`
+- `backdrop_url`
+- optionally `release_year`
 
-### User Profile
-- `GET /api/user/profile` - Get user profile
-- `PUT /api/user/profile` - Update profile
-- `GET /api/user/ratings` - Get user ratings
-- `GET /api/user/preferences` - Get preferences
-- `PUT /api/user/preferences` - Update preferences
+### Build Segment Recommendations
 
-### Movies
-- `GET /api/movies` - List movies (with filters)
-- `GET /api/movies/:id` - Get movie details
-- `GET /api/movies/featured` - Get featured movies
-- `GET /api/movies/:id/ratings` - Get movie ratings
+```bash
+python scripts/build_segment_recommendations.py --clusters 11 --top-n 500 --model-version v1
+```
 
-### Categories
-- `GET /api/categories` - List all genres
-- `GET /api/categories/:genre/movies` - Get movies by genre
+Optional automatic cluster search:
 
-### Ratings
-- `POST /api/movies/:id/ratings` - Create/update rating
-- `GET /api/movies/:id/ratings/user` - Get user's rating
-- `DELETE /api/movies/:id/ratings/:rating_id` - Delete rating
+```bash
+python scripts/build_segment_recommendations.py --auto-k --max-k 20
+```
 
-### Recommendations
-- `GET /api/recommendations/user` - Personalized recommendations
-- `GET /api/recommendations/category/:genre` - Genre recommendations
-- `GET /api/recommendations/home` - Home page recommendations
-- `GET /api/recommendations/similar/:id` - Similar movies
+This script:
 
-### Chatbot
-- `POST /api/chatbot/query` - Send message to chatbot
-- `GET /api/chatbot/history` - Get conversation history
-- `DELETE /api/chatbot/session/:id` - Delete session
-- `POST /api/chatbot/search` - Search movies by description
+- computes user genre-preference vectors from ratings
+- clusters users with KMeans
+- ranks movies per segment
+- stores results in `user_recommendation_profiles` and `type_recommendations`
 
-## Database Schema
+### Rebuild The RAG Index
 
-### Tables
+```bash
+python scripts/rebuild_rag_index.py
+```
 
-**users**
-- id, email, password_hash, nom, prenom
-- created_at, updated_at
+### Inspect Logs
 
-**movies**
-- id, title, genres, release_year
-- description, poster_url, backdrop_url
-- tmdb_id, imdb_id, created_at
+```bash
+python scripts/view_logs.py --tail
+python scripts/view_logs.py --errors
+python scripts/view_logs.py --stats
+python scripts/view_logs.py --search "GET /api/recommendations"
+```
 
-**ratings**
-- id, user_id, movie_id, rating, timestamp
-- Unique constraint: (user_id, movie_id)
+Logs are written to `tmp/app.log` with rotation.
 
-**user_preferences**
-- id, user_id, favorite_genres (JSON)
-- created_at, updated_at
+## API Examples
 
-**chatbot_sessions**
-- id, user_id, conversation_history (JSON)
-- created_at, updated_at
+### Register
 
-**token_blacklist**
-- id, jti, created_at
-
-## Example Usage
-
-### Register User
 ```bash
 curl -X POST http://localhost:5000/api/auth/register \
   -H "Content-Type: application/json" \
@@ -248,6 +409,7 @@ curl -X POST http://localhost:5000/api/auth/register \
 ```
 
 ### Login
+
 ```bash
 curl -X POST http://localhost:5000/api/auth/login \
   -H "Content-Type: application/json" \
@@ -257,150 +419,58 @@ curl -X POST http://localhost:5000/api/auth/login \
   }'
 ```
 
-### Get Recommendations
+### Browse Movies
+
 ```bash
-curl -X GET http://localhost:5000/api/recommendations/user \
-  -H "Authorization: Bearer YOUR_TOKEN"
+curl "http://localhost:5000/api/movies?genre=Sci-Fi&min_rating=4&sort_by=rating&order=desc"
 ```
 
-### Rate a Movie
+### Create Or Update A Rating
+
 ```bash
 curl -X POST http://localhost:5000/api/movies/1/ratings \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{"rating": 4.5}'
 ```
 
-### Chat with AI
+### Personalized Recommendations
+
+```bash
+curl http://localhost:5000/api/recommendations/user \
+  -H "Authorization: Bearer <access_token>"
+```
+
+### Chatbot Query
+
 ```bash
 curl -X POST http://localhost:5000/api/chatbot/query \
   -H "Content-Type: application/json" \
   -d '{
-    "message": "I want a fun action movie for tonight"
+    "message": "Je cherche un film d action recent et bien note"
   }'
 ```
 
-## Project Structure
+## Swagger And Postman
 
-```
-airec-api/
-├── app.py                      # Main Flask application
-├── config.py                   # Configuration settings
-├── run.py                      # WSGI entry point
-├── passenger_wsgi.py           # Passenger WSGI config
-├── requirements.txt            # Python dependencies
-├── .env                        # Environment variables
-├── models/
-│   └── __init__.py            # Database models
-├── routes/
-│   ├── auth.py                # Authentication routes
-│   ├── user.py                # User profile routes
-│   ├── movies.py              # Movie routes
-│   ├── categories.py          # Category routes
-│   ├── ratings.py             # Rating routes
-│   ├── recommendations.py     # Recommendation routes
-│   └── chatbot.py             # Chatbot routes
-├── services/
-│   ├── recommendation_engine.py  # Recommendation logic
-│   └── llm_service.py            # LLM integration
-├── utils/
-│   ├── jwt_handler.py         # JWT utilities
-│   └── validators.py          # Input validation
-└── scripts/
-    ├── import_movielens.py    # Data import script
-    ├── fetch_posters.py       # Poster fetching script
-    ├── init_db.py             # Database initialization
-    └── view_logs.py           # Log viewer utility
-```
+- Swagger UI: `http://localhost:5000/swagger/`
+- OpenAPI spec JSON: `http://localhost:5000/apispec.json`
+- Postman collection: `postman_collection.json`
 
-## Logging
+The Postman collection currently covers the main flows, but it does not yet include every newer endpoint exposed by the codebase, especially some segment and RAG maintenance routes.
 
-### Overview
-All application logs are automatically saved to `tmp/app.log` with automatic rotation:
-- **Log location**: `tmp/app.log`
-- **Rotation**: Automatic at 10MB
-- **Backups**: 5 files retained (~50MB total)
-- **Levels**: DEBUG, INFO, WARNING, ERROR
+## Current Behavior Notes
 
-### Configuration
-Set log level in `.env`:
-```env
-LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR
-```
+- Segment-based recommendation endpoints only become useful after running `scripts/build_segment_recommendations.py`.
+- RAG endpoints only become useful when `RAG_ENABLED=true` and embedding dependencies are installed.
+- Anonymous chatbot requests create sessions with `user_id = null`.
+- The codebase includes Redis configuration, but no route currently uses Redis directly.
 
-### View Logs
-```bash
-# Follow live logs
-tail -f tmp/app.log
+## Additional Docs
 
-# View last 100 lines
-python scripts/view_logs.py --lines 100
+More implementation notes are available under `docs/`, especially:
 
-# Show only errors
-python scripts/view_logs.py --errors
-
-# Follow in real-time
-python scripts/view_logs.py --tail
-
-# Show statistics
-python scripts/view_logs.py --stats
-
-# Search for specific term
-python scripts/view_logs.py --search "user@example.com"
-```
-
-### What Gets Logged
-- ✅ Application startup and configuration
-- ✅ All authentication events
-- ✅ HTTP requests and responses (DEBUG level)
-- ✅ Database operations
-- ✅ Error stack traces
-- ✅ External API calls
-- ✅ User actions
-
-For detailed logging documentation, see [docs/LOGGING.md](docs/LOGGING.md)
-
-## Security Features
-
-- Password hashing with bcrypt
-- JWT token authentication
-- Token blacklisting for logout
-- Input validation and sanitization
-- SQL injection protection (SQLAlchemy ORM)
-- CORS configuration
-- Rate limiting ready
-
-## Performance Optimization
-
-- Database indexes on frequently queried fields
-- Pagination for large result sets
-- Batch processing for imports
-- Optional Redis caching (configurable)
-- Optimized SQL queries with proper joins
-
-## Future Enhancements
-
-- [ ] Redis caching for recommendations
-- [ ] Rate limiting implementation
-- [ ] Advanced ML recommendation models
-- [ ] Social features (follow users, share lists)
-- [ ] Email verification
-- [ ] Password reset functionality
-- [ ] Admin panel
-- [ ] Movie watchlists
-- [ ] User reviews (text)
-
-## License
-
-MIT License
-
-## Support
-
-For issues and questions, please open an issue on GitHub.
-
-## Contributors
-
-- Backend API development
-- Database design and optimization
-- ML recommendation engine
-- Swagger API documentation
+- `docs/QUICKSTART.md`
+- `docs/API_TESTING.md`
+- `docs/RAG_QUICK_START.md`
+- `docs/LOGGING.md`

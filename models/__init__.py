@@ -185,6 +185,73 @@ class Rating(db.Model):
         return f'<Rating user={self.user_id} movie={self.movie_id} rating={self.rating}>'
 
 
+class UserRecommendationProfile(db.Model):
+    """Precomputed recommendation profile for a user"""
+    __tablename__ = 'user_recommendation_profiles'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True, index=True)
+    id_type = db.Column(db.Integer, nullable=False, index=True)
+    vector_json = db.Column(db.Text, nullable=False, default='[]')
+    model_version = db.Column(db.String(50), nullable=False, default='v1', index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = db.relationship('User', backref=db.backref('recommendation_profile', uselist=False))
+
+    def get_vector(self):
+        """Return profile vector as list"""
+        if self.vector_json:
+            try:
+                return json.loads(self.vector_json)
+            except:
+                return []
+        return []
+
+    def set_vector(self, vector):
+        """Set profile vector from list"""
+        self.vector_json = json.dumps(vector)
+
+    def to_dict(self):
+        return {
+            'user_id': self.user_id,
+            'id_type': self.id_type,
+            'model_version': self.model_version,
+            'updated_at': self.updated_at.isoformat(),
+            'vector': self.get_vector()
+        }
+
+
+class TypeRecommendation(db.Model):
+    """Precomputed movie ranking for a user segment (id_type)"""
+    __tablename__ = 'type_recommendations'
+
+    id = db.Column(db.Integer, primary_key=True)
+    id_type = db.Column(db.Integer, nullable=False, index=True)
+    movie_id = db.Column(db.Integer, db.ForeignKey('movies.id'), nullable=False, index=True)
+    score = db.Column(db.Float, nullable=False, index=True)
+    rank = db.Column(db.Integer, nullable=False, index=True)
+    model_version = db.Column(db.String(50), nullable=False, default='v1', index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('id_type', 'movie_id', 'model_version', name='uq_type_movie_model_version'),
+    )
+
+    # Relationships
+    movie = db.relationship('Movie', backref='type_recommendation_rows')
+
+    def to_dict(self):
+        return {
+            'id_type': self.id_type,
+            'movie_id': self.movie_id,
+            'score': self.score,
+            'rank': self.rank,
+            'model_version': self.model_version,
+            'updated_at': self.updated_at.isoformat()
+        }
+
+
 class ChatbotSession(db.Model):
     """Chatbot conversation sessions"""
     __tablename__ = 'chatbot_sessions'
